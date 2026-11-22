@@ -1,4 +1,13 @@
 ##***************************
+####
+## Assignment 2 - Code Review and Improvements
+## Original code: Group 07 (including Livpreet Kaur)
+## Secondary contributor: Mohammadamin Emamimeybodi
+## Contributions:
+## 1. Corrected CSV file paths and added TE filtering quality control.
+## 2. Improved TE composition visualization using percentages.
+## 3. Added a simulated chi-square test and Cramer's V effect size.
+#--------------------------------------------------------------------
 ## Assignment 1
 ##
 ## Group07_Merged_Final_File
@@ -28,12 +37,12 @@ theme_set(theme_light())
 
 ## code for assignment part 1 ----
 
-df_trich_sp <- read.csv("../data/trichinella_spiralis_te.csv")
+df_trich_sp <- read.csv("Data/trichinella_spiralis_te.csv")
 df_trich_sp
 
 plot(sort(table(df_trich_sp$matching_class), decreasing = T)[1:10])
 
-df_trich_s9 <- read.csv("../data/GCA_001447505.1.csv")
+df_trich_s9 <- read.csv("Data/GCA_001447505.1.csv")
 df_trich_s9
 
 plot(sort(table(df_trich_s9$matching_class), decreasing = T)[1:10])
@@ -154,10 +163,9 @@ summary(model4)
 
 df_all_te |>
   ggplot(aes(x = perc_div, fill = species)) +
-  geom_density(bins = 30, alpha = 0.6, position = "identity") +
+  geom_density(alpha = 0.6, position = "identity") +
   scale_fill_manual(values = c("spiralis" = "steelblue", "T9" = "tomato")) +
-  labs(x = "Percent Divergence", y = "Count", fill = "Species") 
-
+  labs(x = "Percent Divergence", y = "Density", fill = "Species")
 common_te <- c("DNA/MULE-MuDR", "DNA/PIF-Harbinger", "DNA/TcMar-Tc1", "LINE/CR1", "LTR/Gypsy", "LTR/Ngaro", "LTR/Pao", "PLE", "PLE/Naiad")
 
 df_common_te <- df_all_te |>
@@ -177,9 +185,9 @@ df_common_te |>
 
 # Loading datasets
 
-df_trichinella_sp <- read.csv("../data/trichinella_spiralis_te.csv")
+df_trichinella_sp <- read.csv("Data/trichinella_spiralis_te.csv")
 
-df_trichinella_t9 <- read.csv("../data/GCA_001447505.1.csv")
+df_trichinella_t9 <- read.csv("Data/GCA_001447505.1.csv")
 
 
 # Getting to know about the datasets
@@ -214,6 +222,28 @@ df_sp_te <- df_trichinella_sp |>
 
 df_t9_te <- df_trichinella_t9 |>
   filter(!(matching_class %in% non_te))
+
+
+# Quality control: TE filtering summary ----
+
+df_te_qc <- tibble(
+  dataset = c("T. spiralis", "T9"),
+  total_records = c(
+    nrow(df_trichinella_sp),
+    nrow(df_trichinella_t9)
+  ),
+  te_records = c(
+    nrow(df_sp_te),
+    nrow(df_t9_te)
+  )
+) |>
+  mutate(
+    removed_records = total_records - te_records,
+    te_percentage = round(100 * te_records / total_records, 2)
+  )
+
+print(df_te_qc)
+
 
 # Adding dataset names
 
@@ -253,15 +283,23 @@ te_composition
 
 # Visualizing TE family composition
 
+# Improved comparison of TE family composition
+
 te_composition |>
-  ggplot(aes(x = matching_class,
-             y = proportion,
-             colour = dataset)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(x = "TE Family/Class",
-       y = "Proportion of TE Annotations",
-       colour = "Dataset")
+  ggplot(aes(
+    x = reorder(matching_class, percentage),
+    y = percentage,
+    fill = dataset
+  )) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "TE Family Composition: T. spiralis vs T9",
+    x = "TE Family/Class",
+    y = "Percentage of TE Annotations (%)",
+    fill = "Dataset"
+  ) +
+  theme_minimal()
 
 # Ranking TE families by abundance
 
@@ -286,3 +324,36 @@ te_composition |>
   tail(5) |>
   summarise(top_five_percentage = sum(percentage))
 # Gives us the combined percentage of top five, %91.7
+
+
+
+# Assignment 2 improvement 3: Statistical comparison of TE composition ----
+
+# Build a contingency table of TE family counts
+te_count_table <- table(
+  df_all_tes$dataset,
+  df_all_tes$matching_class
+)
+
+# Display observed counts
+print(te_count_table)
+
+# Chi-square test with simulated p-value
+# Simulation helps when some TE families have low counts
+set.seed(123)
+
+te_chisq <- chisq.test(
+  te_count_table,
+  simulate.p.value = TRUE,
+  B = 10000
+)
+
+print(te_chisq)
+
+# Calculate Cramer's V as an effect size
+cramers_v <- sqrt(
+  as.numeric(te_chisq$statistic) /
+    (sum(te_count_table) * (min(dim(te_count_table)) - 1))
+)
+
+print(cramers_v)
